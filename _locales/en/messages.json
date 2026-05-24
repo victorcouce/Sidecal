@@ -1,0 +1,162 @@
+{
+  "appName": {
+    "message": "Sidecal"
+  },
+  "appDescription": {
+    "message": "Predictive calendar for your favorite YouTube creators"
+  },
+  "calendar": {
+    "message": "Calendar"
+  },
+  "loading": {
+    "message": "Loading..."
+  },
+  "close": {
+    "message": "Close"
+  },
+  "back": {
+    "message": "Back"
+  },
+  "refresh": {
+    "message": "Refresh"
+  },
+  "retry": {
+    "message": "Retry"
+  },
+  "search": {
+    "message": "Search"
+  },
+  "clearAll": {
+    "message": "Clear all"
+  },
+  "manageFavorites": {
+    "message": "Manage Favorites"
+  },
+  "addFavorites": {
+    "message": "Add Favorites"
+  },
+  "yourFavoriteCreators": {
+    "message": "Your Favorite Creators"
+  },
+  "searchChannelPlaceholder": {
+    "message": "Search channels..."
+  },
+  "searchChannel": {
+    "message": "Search channel"
+  },
+  "selectedCountOne": {
+    "message": "$COUNT$ channel selected",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "selectedCountMany": {
+    "message": "$COUNT$ channels selected",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "yourSubscriptions": {
+    "message": "Your Subscriptions"
+  },
+  "emptyCalendarTitle": {
+    "message": "No favorites yet"
+  },
+  "emptyCalendarSub": {
+    "message": "Add your favorite creators to see predicted upload dates."
+  },
+  "emptySubscriptionsTitle": {
+    "message": "Could not load subscriptions"
+  },
+  "emptySubscriptionsSub": {
+    "message": "Try reloading YouTube."
+  },
+  "insufficientDataTitle": {
+    "message": "Not enough data"
+  },
+  "insufficientDataSub": {
+    "message": "This creator has fewer than 4 recent videos."
+  },
+  "channelInactive": {
+    "message": "This channel appears to be inactive."
+  },
+  "errorLoadingChannel": {
+    "message": "Could not load data for this channel."
+  },
+  "errorGeneral": {
+    "message": "Something went wrong. Please try again."
+  },
+  "contextInvalidated": {
+    "message": "Extension was updated. Please reload this page."
+  },
+  "disclaimer": {
+    "message": "Predictions are estimates based on upload history. Not confirmed by YouTube or creators."
+  },
+  "predictedUpload": {
+    "message": "Predicted upload"
+  },
+  "nextExpectedUpload": {
+    "message": "Next Expected Upload"
+  },
+  "estimatedDate": {
+    "message": "Estimated date"
+  },
+  "confidenceHigh": {
+    "message": "High confidence"
+  },
+  "confidenceMedium": {
+    "message": "Medium confidence"
+  },
+  "confidenceLow": {
+    "message": "Low confidence"
+  },
+  "confidenceInsufficient": {
+    "message": "Insufficient data"
+  },
+  "lastVideo": {
+    "message": "Last video"
+  },
+  "estimateDisclaimer": {
+    "message": "This is an estimate, not a confirmed schedule."
+  },
+  "lastUpdated": {
+    "message": "Last updated"
+  },
+  "updating": {
+    "message": "Updating..."
+  },
+  "showLowConfidence": {
+    "message": "Show low confidence"
+  },
+  "hideLowConfidence": {
+    "message": "Hide low confidence"
+  },
+  "moreEvents": {
+    "message": "+$COUNT$ more",
+    "placeholders": {
+      "count": { "content": "$1" }
+    }
+  },
+  "today": {
+    "message": "Today"
+  },
+  "monday": { "message": "Mon" },
+  "tuesday": { "message": "Tue" },
+  "wednesday": { "message": "Wed" },
+  "thursday": { "message": "Thu" },
+  "friday": { "message": "Fri" },
+  "saturday": { "message": "Sat" },
+  "sunday": { "message": "Sun" },
+  "januaryFull": { "message": "January" },
+  "februaryFull": { "message": "February" },
+  "marchFull": { "message": "March" },
+  "aprilFull": { "message": "April" },
+  "mayFull": { "message": "May" },
+  "juneFull": { "message": "June" },
+  "julyFull": { "message": "July" },
+  "augustFull": { "message": "August" },
+  "septemberFull": { "message": "September" },
+  "octoberFull": { "message": "October" },
+  "novemberFull": { "message": "November" },
+  "decemberFull": { "message": "December" }
+}
