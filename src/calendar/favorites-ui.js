@@ -1,167 +1,188 @@
+/* ═══════════════════════════════════════════════════════════
+   favorites-ui.js — Creators view (manage tracked channels)
+═══════════════════════════════════════════════════════════ */
 (function () {
   if (!window.SCAL) window.SCAL = {};
 
-  const { t } = SCAL.i18n;
   const { escapeHtml } = SCAL.utils;
 
-  let containerEl = null;
-  let isLoading = false;
+  const SEARCH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
 
-  async function renderFavorites(container) {
+  let containerEl    = null;
+  let allChannels    = [];
+  let favIds         = new Set();
+
+  /* ─── render (entry point from panel) ───────────────────── */
+  async function render(container) {
     containerEl = container;
-    container.innerHTML = '';
-
-    const [favorites, allChannels] = await Promise.all([
-      SCAL.storage.getFavorites(),
-      SCAL.channelDiscovery.fetchSubscriptions(),
-    ]);
-
-    const favIds = new Set(Object.keys(favorites));
-    const selectedCount = favIds.size;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'scal-favorites-view';
-
-    wrapper.innerHTML = `
-      <div class="scal-favorites-header">
-        <h3 class="scal-favorites-title">${escapeHtml(t('yourFavoriteCreators'))}</h3>
-        ${selectedCount > 0 ? `<span class="scal-selected-count">${selectedCount}</span>` : ''}
-      </div>
-      <div class="scal-search-box">
-        <input type="text" class="scal-search-input" placeholder="${escapeHtml(t('searchChannelPlaceholder'))}" aria-label="${escapeHtml(t('searchChannel'))}">
+    container.innerHTML = `
+      <div class="scal-loading" style="padding: 40px 16px;">
+        <div class="scal-spinner"></div>
+        <span>Loading your channels…</span>
       </div>
     `;
 
-    const searchInput = wrapper.querySelector('.scal-search-input');
-    let filteredChannels = allChannels;
+    try {
+      const [favorites, channels] = await Promise.all([
+        SCAL.storage.getFavorites(),
+        SCAL.channelDiscovery.fetchSubscriptions(),
+      ]);
 
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      filteredChannels = allChannels.filter(ch => ch.name.toLowerCase().includes(query));
-      renderChannelList(wrapper, filteredChannels, favIds);
-    });
-
-    container.appendChild(wrapper);
-    renderChannelList(wrapper, filteredChannels, favIds);
-
-    const footer = document.createElement('div');
-    footer.className = 'scal-favorites-footer';
-    footer.innerHTML = `
-      ${selectedCount > 0 ? `<button class="scal-btn scal-btn-secondary scal-clear-all">${escapeHtml(t('clearAll'))}</button>` : ''}
-      <button class="scal-btn scal-btn-primary scal-back-btn">${escapeHtml(t('back'))}</button>
-    `;
-
-    if (selectedCount > 0) {
-      footer.querySelector('.scal-clear-all').addEventListener('click', clearAll);
+      favIds      = new Set(Object.keys(favorites));
+      allChannels = channels;
+      renderContent('');
+    } catch (e) {
+      console.warn('[SCAL] Creators view error:', e.message);
+      container.innerHTML = `
+        <div class="scal-error" style="padding: 32px 16px;">
+          <div>Could not load subscriptions.</div>
+          <button class="scal-btn scal-btn-secondary" style="margin-top: 10px;"
+                  onclick="SCAL.creatorsView.render(document.getElementById('scal-panel-body'))">
+            Retry
+          </button>
+        </div>
+      `;
     }
-    footer.querySelector('.scal-back-btn').addEventListener('click', hide);
-
-    container.appendChild(footer);
   }
 
-  function renderChannelList(wrapper, channels, favIds) {
-    const existingList = wrapper.querySelector('.scal-channel-list');
-    if (existingList) existingList.remove();
+  /* ─── renderContent ──────────────────────────────────────── */
+  function renderContent(query) {
+    if (!containerEl) return;
 
-    const list = document.createElement('div');
-    list.className = 'scal-channel-list';
+    const filtered = query
+      ? allChannels.filter(ch => ch.name.toLowerCase().includes(query.toLowerCase()))
+      : allChannels;
 
-    if (channels.length === 0) {
-      list.innerHTML = `<div class="scal-no-results">${escapeHtml(t('noResults'))}</div>`;
-      wrapper.appendChild(list);
+    const favCount = favIds.size;
+
+    containerEl.innerHTML = `
+      <div class="scal-creators-header">
+        <span class="scal-creators-title">Your Creators</span>
+        ${favCount > 0 ? `<span class="scal-count-badge">${favCount}</span>` : ''}
+        ${favCount > 0 ? `<button class="scal-btn scal-btn-sm scal-clear-all-btn"
+                                  style="margin-left:auto;font-size:12px;">Clear all</button>` : ''}
+      </div>
+      <div class="scal-search-wrap">
+        ${SEARCH_SVG}
+        <input
+          class="scal-search-input"
+          type="text"
+          placeholder="Search channels…"
+          value="${escapeHtml(query)}"
+          aria-label="Search channels"
+        />
+      </div>
+      <div class="scal-channel-list" id="scal-channel-list"></div>
+      <div class="scal-creators-info">
+        Only favorited creators are used to generate upload predictions.
+      </div>
+    `;
+
+    // Wire search
+    containerEl.querySelector('.scal-search-input').addEventListener('input', e => {
+      renderContent(e.target.value);
+    });
+
+    // Wire clear all
+    containerEl.querySelector('.scal-clear-all-btn')?.addEventListener('click', clearAll);
+
+    // Render channel rows
+    const listEl = document.getElementById('scal-channel-list');
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `
+        <div class="scal-no-results">
+          ${query ? `No channels match "<strong>${escapeHtml(query)}</strong>"` : 'No channels found.'}
+        </div>
+      `;
       return;
     }
 
-    channels.forEach(ch => {
+    filtered.forEach(ch => {
       const isFav = favIds.has(ch.id);
-      const item = document.createElement('div');
-      item.className = 'scal-channel-item';
+      const row   = document.createElement('div');
+      row.className = 'scal-creator-row';
 
-      const avatar = ch.avatar
-        ? `<img class="scal-channel-avatar" src="${escapeHtml(ch.avatar)}" alt="" loading="lazy">`
-        : `<div class="scal-channel-avatar scal-avatar-placeholder">${escapeHtml(ch.name.charAt(0).toUpperCase())}</div>`;
+      // Handle from href (/@handle or /channel/id)
+      let handle = '';
+      if (ch.href) {
+        const m = ch.href.match(/\/@([^/?]+)/);
+        handle = m ? `@${m[1]}` : ch.href.replace('/channel/', '').slice(0, 20);
+      }
 
-      item.innerHTML = `
-        ${avatar}
-        <span class="scal-channel-name">${escapeHtml(ch.name)}</span>
-        <button class="scal-btn-toggle-fav ${isFav ? 'scal-is-favorite' : ''}" data-channel-id="${escapeHtml(ch.id)}" aria-label="${escapeHtml(isFav ? 'Remove favorite' : 'Add favorite')}">
-          ${isFav ? '⭐' : '☆'}
+      const bgColor = ch.color || stringToColor(ch.id);
+      const initial = (ch.name || '?').charAt(0).toUpperCase();
+      const avatarHtml = ch.avatar
+        ? `<img src="${escapeHtml(ch.avatar)}" alt="" loading="lazy"
+               style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+        : `<div style="width:34px;height:34px;border-radius:50%;background:${escapeHtml(bgColor)};
+                display:flex;align-items:center;justify-content:center;
+                font-size:13px;font-weight:600;color:#fff;flex-shrink:0;">${escapeHtml(initial)}</div>`;
+
+      row.innerHTML = `
+        ${avatarHtml}
+        <div class="scal-creator-info">
+          <div class="scal-creator-name">${escapeHtml(ch.name)}</div>
+          ${handle ? `<div class="scal-creator-handle">${escapeHtml(handle)}</div>` : ''}
+        </div>
+        <button class="scal-fav-btn ${isFav ? 'scal-is-fav' : ''}"
+                data-id="${escapeHtml(ch.id)}"
+                aria-label="${isFav ? 'Remove from favorites' : 'Add to favorites'}"
+                title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+          ${isFav ? '★' : '☆'}
         </button>
       `;
 
-      item.querySelector('.scal-btn-toggle-fav').addEventListener('click', (e) => {
-        e.preventDefault();
+      row.querySelector('.scal-fav-btn').addEventListener('click', e => {
         e.stopPropagation();
-        toggleFavorite(ch, e.target);
+        toggleFavorite(ch, e.currentTarget, query);
       });
 
-      list.appendChild(item);
+      listEl.appendChild(row);
     });
-
-    wrapper.appendChild(list);
   }
 
-  async function toggleFavorite(channel, btn) {
-    const isFav = btn.classList.contains('scal-is-favorite');
+  /* ─── toggleFavorite ─────────────────────────────────────── */
+  async function toggleFavorite(channel, btn, currentQuery) {
+    const isFav = favIds.has(channel.id);
 
     if (isFav) {
       await SCAL.storage.removeFavorite(channel.id);
+      favIds.delete(channel.id);
     } else {
+      // Attach color for calendar rendering
+      channel.color = channel.color || stringToColor(channel.id);
       await SCAL.storage.addFavorite(channel);
+      favIds.add(channel.id);
     }
 
-    btn.classList.toggle('scal-is-favorite');
-    btn.textContent = btn.classList.contains('scal-is-favorite') ? '⭐' : '☆';
-    btn.setAttribute('aria-label', btn.classList.contains('scal-is-favorite') ? 'Remove favorite' : 'Add favorite');
-
-    const favorites = await SCAL.storage.getFavorites();
-    const count = Object.keys(favorites).length;
-    const countEl = containerEl?.querySelector('.scal-selected-count');
-    if (count > 0) {
-      if (!countEl) {
-        const titleEl = containerEl?.querySelector('.scal-favorites-title');
-        if (titleEl) {
-          const newCount = document.createElement('span');
-          newCount.className = 'scal-selected-count';
-          newCount.textContent = count;
-          titleEl.parentNode.insertBefore(newCount, titleEl.nextSibling);
-        }
-      } else {
-        countEl.textContent = count;
-      }
-    } else if (countEl) {
-      countEl.remove();
-    }
-
-    const footer = containerEl?.querySelector('.scal-favorites-footer');
-    if (footer && count === 0 && footer.querySelector('.scal-clear-all')) {
-      footer.querySelector('.scal-clear-all').remove();
-    }
+    // Re-render keeping the current search query
+    renderContent(currentQuery || '');
   }
 
+  /* ─── clearAll ───────────────────────────────────────────── */
   async function clearAll() {
-    if (confirm('Clear all favorites?')) {
-      await SCAL.storage.clearFavorites();
-      const favorites = await SCAL.storage.getFavorites();
-      const allChannels = await SCAL.channelDiscovery.fetchSubscriptions();
-      renderFavorites(containerEl);
+    await SCAL.storage.clearFavorites();
+    favIds.clear();
+    renderContent('');
+  }
+
+  /* ─── Deterministic color from channel id ────────────────── */
+  function stringToColor(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h},50%,40%)`;
   }
 
-  function show(container) {
-    renderFavorites(container);
-  }
-
+  /* ─── Legacy show/hide (kept for backward compat) ────────── */
+  function show(container) { render(container); }
   function hide() {
-    if (containerEl) {
-      containerEl.innerHTML = '';
-      SCAL.calendarUI.renderContent();
-    }
+    if (containerEl) containerEl.innerHTML = '';
   }
 
-  window.SCAL.favoritesUI = {
-    show,
-    hide,
-    renderFavorites,
-  };
+  window.SCAL.creatorsView = { render };
+  window.SCAL.favoritesUI  = { show, hide, renderFavorites: render };
 })();

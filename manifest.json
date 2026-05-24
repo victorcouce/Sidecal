@@ -40,6 +40,7 @@
         "src/prediction/explainer.js",
         "src/prediction/analyzer.js",
         "src/content/sidebar-entry.js",
+        "src/calendar/list-view.js",
         "src/calendar/favorites-ui.js",
         "src/calendar/calendar-ui.js",
         "src/content/calendar-panel.js",

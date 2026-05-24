@@ -1,212 +1,242 @@
+/* ═══════════════════════════════════════════════════════════
+   calendar-panel.js — Sidecal sliding panel with 3-tab UI
+═══════════════════════════════════════════════════════════ */
 (function () {
   if (!window.SCAL) window.SCAL = {};
 
-  let panelEl = null;
-  let isOpen = false;
+  let panelEl   = null;
+  let isOpen    = false;
+  let curView   = 'calendar'; // 'calendar' | 'list' | 'creators'
+  let lastUpdated = null;
 
+  /* ─── SVG icons ──────────────────────────────────────────── */
+  const IC_REFRESH = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 2.2"/></svg>`;
+  const IC_CLOSE   = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  const IC_INFO    = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+
+  /* ─── Build panel DOM ────────────────────────────────────── */
   function createPanel() {
     const panel = document.createElement('div');
     panel.className = 'scal-panel';
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', SCAL.i18n.t('calendar'));
+    panel.setAttribute('aria-label', 'Sidecal predictive calendar');
 
     panel.innerHTML = `
       <div class="scal-panel-header">
-        <h2 class="scal-panel-title">${SCAL.utils.escapeHtml(SCAL.i18n.t('calendar'))}</h2>
-        <button class="scal-btn-icon scal-panel-close" aria-label="${SCAL.utils.escapeHtml(SCAL.i18n.t('close'))}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div class="scal-panel-title-row">
+          <div class="scal-panel-title-text">
+            <span class="scal-panel-title">Sidecal</span>
+            <span class="scal-panel-meta" id="scal-panel-meta">Predictive calendar</span>
+          </div>
+          <div class="scal-panel-title-actions">
+            <button class="scal-btn scal-btn-sm scal-refresh-btn">
+              ${IC_REFRESH}<span class="scal-refresh-label">Refresh</span>
+            </button>
+            <button class="scal-btn-icon scal-panel-close" aria-label="Close Sidecal">
+              ${IC_CLOSE}
+            </button>
+          </div>
+        </div>
+        <div class="scal-view-tabs" role="tablist">
+          <button class="scal-view-tab scal-tab-active" data-view="calendar" role="tab" aria-selected="true">Calendar</button>
+          <button class="scal-view-tab" data-view="list" role="tab" aria-selected="false">List</button>
+          <button class="scal-view-tab" data-view="creators" role="tab" aria-selected="false">Creators</button>
+        </div>
+      </div>
+      <div class="scal-info-banner" id="scal-info-banner">
+        ${IC_INFO}
+        <span>Predictions are estimates based on upload history. Not confirmed by creators.</span>
       </div>
       <div class="scal-panel-body" id="scal-panel-body"></div>
-      <div class="scal-panel-footer">
-        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-          <button class="scal-btn scal-btn-secondary scal-refresh-btn" title="Refresh predictions">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 2.2"/></svg>
-            Refresh
-          </button>
-          <button class="scal-btn scal-btn-secondary scal-manage-fav-btn" style="flex: 1;">
-            ⭐ Manage
-          </button>
-        </div>
-        <span class="scal-disclaimer">${SCAL.utils.escapeHtml(SCAL.i18n.t('disclaimer'))}</span>
-      </div>
     `;
 
     panel.querySelector('.scal-panel-close').addEventListener('click', close);
     panel.querySelector('.scal-refresh-btn').addEventListener('click', manualRefresh);
-    panel.querySelector('.scal-manage-fav-btn').addEventListener('click', () => {
-      SCAL.favoritesUI.show(document.getElementById('scal-panel-body'));
+    panel.querySelectorAll('.scal-view-tab').forEach(tab => {
+      tab.addEventListener('click', () => switchView(tab.dataset.view));
     });
 
     return panel;
   }
 
-  async function open() {
-    if (isOpen && panelEl) return;
+  /* ─── Tab switching ──────────────────────────────────────── */
+  function switchView(view) {
+    curView = view;
 
-    if (!panelEl) {
-      panelEl = createPanel();
-    }
+    if (!panelEl) return;
 
-    const appEl = document.querySelector('ytd-app') || document.body;
-    appEl.appendChild(panelEl);
-    isOpen = true;
-
-    requestAnimationFrame(() => {
-      panelEl.classList.add('scal-panel-open');
+    // Update tab active states
+    panelEl.querySelectorAll('.scal-view-tab').forEach(tab => {
+      const active = tab.dataset.view === view;
+      tab.classList.toggle('scal-tab-active', active);
+      tab.setAttribute('aria-selected', String(active));
     });
 
-    SCAL.calendarUI.render(document.getElementById('scal-panel-body'));
+    // Info banner only for calendar / list
+    const banner = panelEl.querySelector('#scal-info-banner');
+    if (banner) banner.style.display = view === 'creators' ? 'none' : '';
 
-    document.querySelector('.scal-sidebar-entry')?.classList.add('scal-active');
-
-    // Load and analyze data
-    loadPredictions();
+    renderCurrentView();
   }
 
-  async function manualRefresh() {
-    const btn = panelEl?.querySelector('.scal-refresh-btn');
-    if (btn) {
-      btn.disabled = true;
-      btn.style.opacity = '0.5';
-    }
+  /* ─── Render the active view ─────────────────────────────── */
+  function renderCurrentView() {
+    const body = document.getElementById('scal-panel-body');
+    if (!body) return;
+    body.innerHTML = '';
 
-    try {
-      await loadPredictions();
-      if (btn) {
-        btn.textContent = '✓ Done';
-        setTimeout(() => {
-          btn.textContent = '⟳ Refresh';
-          btn.disabled = false;
-          btn.style.opacity = '1';
-        }, 2000);
-      }
-    } catch (e) {
-      console.warn('[SCAL] Manual refresh error:', e.message);
-      if (btn) {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-      }
+    if (curView === 'calendar') {
+      SCAL.calendarUI.render(body);
+      loadPredictions();
+    } else if (curView === 'list') {
+      SCAL.listView.render(body);
+      loadPredictions();
+    } else if (curView === 'creators') {
+      SCAL.creatorsView.render(body);
     }
   }
 
+  /* ─── Load & analyze predictions ────────────────────────── */
   async function loadPredictions() {
-    const panelBody = document.getElementById('scal-panel-body');
-    if (!panelBody) return;
+    const favorites = await SCAL.storage.getFavorites();
+    const favList   = Object.values(favorites);
 
-    // Show loading state
-    const loadingEl = document.createElement('div');
-    loadingEl.className = 'scal-loading';
-    loadingEl.innerHTML = `
-      <div class="scal-spinner"></div>
-      <span>${SCAL.i18n.t('loading')}</span>
-    `;
-    panelBody.innerHTML = '';
-    panelBody.appendChild(loadingEl);
+    if (favList.length === 0) {
+      if (curView === 'calendar') {
+        SCAL.calendarUI.showEmpty(() => switchView('creators'));
+      } else if (curView === 'list') {
+        SCAL.listView.showEmpty(() => switchView('creators'));
+      }
+      return;
+    }
 
     try {
-      const favorites = await SCAL.storage.getFavorites();
-      const favList = Object.values(favorites);
-
-      if (favList.length === 0) {
-        // No favorites, empty state will be shown by calendarUI
-        SCAL.calendarUI.renderContent();
-        return;
-      }
-
-      // For each favorite, get videos and analyze
-      let successCount = 0;
       for (const channel of favList) {
         try {
-          // Check if should refresh from RSS
           const shouldRefresh = await SCAL.videoCache.shouldRefresh(channel.id);
           let videos = null;
 
           if (shouldRefresh) {
             videos = await SCAL.rssFetcher.fetchChannelRSS(channel.id);
-            if (videos) {
-              await SCAL.videoCache.cacheVideos(channel.id, videos, channel.name);
-            }
+            if (videos) await SCAL.videoCache.cacheVideos(channel.id, videos, channel.name);
           } else {
             videos = await SCAL.videoCache.getCachedVideos(channel.id);
           }
 
-          // Analyze and save prediction
           if (videos && videos.length > 0) {
             const analysis = SCAL.prediction.analyzeChannel(videos);
             await SCAL.storage.setPrediction(channel.id, {
-              channelId: channel.id,
-              channelName: channel.name,
+              channelId:     channel.id,
+              channelName:   channel.name,
               channelAvatar: channel.avatar,
+              channelColor:  channel.color,
               ...analysis,
               calculatedAt: new Date().toISOString(),
             });
-            successCount++;
           }
         } catch (e) {
-          console.warn(`[SCAL] Error loading predictions for ${channel.name}:`, e.message);
+          console.warn(`[SCAL] Error loading ${channel.name}:`, e.message);
         }
       }
 
-      // Update settings with last refresh time
+      // Stamp last-updated time
+      lastUpdated = new Date();
       const settings = await SCAL.storage.getSettings();
-      settings.lastGlobalRefresh = new Date().toISOString();
+      settings.lastGlobalRefresh = lastUpdated.toISOString();
       await SCAL.storage.saveSettings(settings);
+      updateMeta();
 
-      // Render predictions on calendar
-      const predictions = await SCAL.storage.getPredictions();
-      const predList = Object.values(predictions);
+      // Fetch stored predictions and render
+      const stored   = await SCAL.storage.getPredictions();
+      const predList = Object.values(stored);
 
-      // Clear loading and re-render calendar with predictions
-      loadingEl.remove();
-      SCAL.calendarUI.renderMonth(panelBody, new Date().getFullYear(), new Date().getMonth());
-      SCAL.calendarUI.renderContent();
-      SCAL.calendarUI.renderPredictions(predList);
-
-      console.log(`[SCAL] Loaded predictions for ${successCount} channels`);
+      if (curView === 'calendar') {
+        SCAL.calendarUI.renderPredictions(predList);
+      } else if (curView === 'list') {
+        SCAL.listView.renderPredictions(predList);
+      }
     } catch (e) {
-      console.warn('[SCAL] Error loading predictions:', e.message);
-
-      // Show error state
-      panelBody.innerHTML = '';
-      const errorEl = document.createElement('div');
-      errorEl.className = 'scal-error';
-      errorEl.innerHTML = `
-        <div>${SCAL.utils.escapeHtml(SCAL.i18n.t('errorGeneral'))}</div>
-        <button class="scal-btn scal-btn-secondary scal-error-retry" style="margin-top: 8px;">${SCAL.utils.escapeHtml(SCAL.i18n.t('retry'))}</button>
-      `;
-      errorEl.querySelector('.scal-error-retry').addEventListener('click', () => {
-        loadPredictions();
-      });
-      panelBody.appendChild(errorEl);
+      console.warn('[SCAL] loadPredictions error:', e.message);
+      if (curView === 'calendar') {
+        SCAL.calendarUI.showError(() => loadPredictions());
+      } else if (curView === 'list') {
+        SCAL.listView.showError(() => loadPredictions());
+      }
     }
+  }
+
+  /* ─── Update meta line ───────────────────────────────────── */
+  function updateMeta() {
+    const el = document.getElementById('scal-panel-meta');
+    if (!el || !lastUpdated) return;
+    const t = lastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    el.textContent = `Predictive calendar · Updated ${t}`;
+  }
+
+  /* ─── Manual refresh ─────────────────────────────────────── */
+  async function manualRefresh() {
+    const btn = panelEl?.querySelector('.scal-refresh-btn');
+    if (!btn || btn.disabled) return;
+
+    btn.disabled = true;
+    const label = btn.querySelector('.scal-refresh-label');
+    if (label) label.textContent = 'Refreshing…';
+
+    try {
+      // Bust the video cache so RSS is re-fetched
+      await SCAL.videoCache.clearCache();
+      SCAL.storage.invalidateCache();
+      await loadPredictions();
+    } finally {
+      btn.disabled = false;
+      if (label) label.textContent = 'Refresh';
+    }
+  }
+
+  /* ─── Open / close / toggle ──────────────────────────────── */
+  async function open() {
+    if (isOpen && panelEl) return;
+    if (!panelEl) panelEl = createPanel();
+
+    const appEl = document.querySelector('ytd-app') || document.body;
+    appEl.appendChild(panelEl);
+    isOpen = true;
+
+    requestAnimationFrame(() => panelEl.classList.add('scal-panel-open'));
+    document.querySelector('.scal-sidebar-entry')?.classList.add('scal-active');
+
+    // Restore last-updated time from storage
+    try {
+      const settings = await SCAL.storage.getSettings();
+      if (settings.lastGlobalRefresh) {
+        lastUpdated = new Date(settings.lastGlobalRefresh);
+        updateMeta();
+      }
+    } catch (_) {}
+
+    switchView(curView);
   }
 
   function close() {
     if (!isOpen || !panelEl) return;
-
     panelEl.classList.remove('scal-panel-open');
     panelEl.addEventListener('transitionend', () => {
-      panelEl.remove();
+      panelEl?.remove();
       panelEl = null;
     }, { once: true });
-
     isOpen = false;
     document.querySelector('.scal-sidebar-entry')?.classList.remove('scal-active');
   }
 
   function toggle() {
-    if (isOpen) {
-      close();
-    } else {
-      open();
-    }
+    isOpen ? close() : open();
   }
 
   window.SCAL.calendarPanel = {
     open,
     close,
     toggle,
-    isOpen: () => isOpen,
+    isOpen:     () => isOpen,
+    switchView,
   };
 })();
